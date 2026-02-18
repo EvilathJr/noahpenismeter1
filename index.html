@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Noah Penis Meter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0f;
+      color: #e0dff5;
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(232,255,71,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(232,255,71,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    h1 {
+      font-size: clamp(0.9rem, 2.5vw, 1.2rem);
+      font-weight: 800;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #e8ff47;
+      text-shadow: 0 0 30px rgba(232,255,71,0.35);
+    }
+
+    #barSvg {
+      width: 162px;
+      height: 400px;
+      display: block;
+      overflow: visible;
+    }
+
+    .bar-value {
+      font-family: 'Syne Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #e8ff47;
+      letter-spacing: 0.04em;
+      text-shadow: 0 0 20px rgba(232,255,71,0.5);
+      text-align: center;
+    }
+
+    footer {
+      font-family: 'Syne Mono', monospace;
+      font-size: 0.62rem;
+      color: #555570;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    /* ── Rain layer ── */
+    #rainCanvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    #rainCanvas.active { opacity: 1; }
+
+    /* Flash overlay on 100% hit */
+    #flash {
+      position: fixed;
+      inset: 0;
+      background: rgba(232, 255, 71, 0.18);
+      pointer-events: none;
+      z-index: 9;
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+    #flash.show { opacity: 1; }
+
+    /* 100% label pulse */
+    .bar-value.full {
+      color: #e8ff47;
+      animation: valuePulse 0.8s ease infinite alternate;
+    }
+    @keyframes valuePulse {
+      from { text-shadow: 0 0 10px rgba(232,255,71,0.4); }
+      to   { text-shadow: 0 0 40px rgba(232,255,71,1), 0 0 80px rgba(232,255,71,0.5); }
+    }
+    /* ── Countdown ── */
+    #countdown-wrap {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      z-index: 20;
+    }
+    #countdown-label {
+      font-family: 'Syne Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: #3a3a55;
+    }
+    #countdown-value {
+      font-family: 'Syne Mono', monospace;
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: #3a3a55;
+      letter-spacing: 0.08em;
+      transition: color 0.4s, text-shadow 0.4s;
+    }
+    #countdown-value.warning {
+      color: #ff6b35;
+      text-shadow: 0 0 20px rgba(255,107,53,0.6);
+      animation: countWarning 0.5s ease infinite alternate;
+    }
+    #countdown-value.critical {
+      color: #ff2244;
+      text-shadow: 0 0 30px rgba(255,34,68,1), 0 0 60px rgba(255,34,68,0.5);
+      animation: countCritical 0.2s ease infinite alternate;
+    }
+    @keyframes countWarning {
+      from { transform: scale(1); }
+      to   { transform: scale(1.04); }
+    }
+    @keyframes countCritical {
+      from { transform: scale(1) skewX(0deg); }
+      to   { transform: scale(1.08) skewX(-1deg); }
+    }
+
+    /* ── Zero event overlay ── */
+    #zero-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.05s;
+    }
+    #zero-overlay.visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+    #zero-title {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2rem, 8vw, 5rem);
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #ff2244;
+      text-shadow: 0 0 40px rgba(255,34,68,0.8), 0 0 100px rgba(255,34,68,0.4);
+      animation: glitch 2s infinite;
+    }
+    #zero-sub {
+      font-family: 'Syne Mono', monospace;
+      font-size: clamp(0.65rem, 2vw, 0.9rem);
+      letter-spacing: 0.3em;
+      color: #ff2244;
+      opacity: 0.6;
+      text-transform: uppercase;
+    }
+    #zero-code {
+      font-family: 'Syne Mono', monospace;
+      font-size: 0.7rem;
+      color: #ff224488;
+      letter-spacing: 0.1em;
+      max-width: 400px;
+      text-align: center;
+      line-height: 1.9;
+    }
+    @keyframes glitch {
+      0%,95%,100% { clip-path: none; transform: translate(0); }
+      96%  { clip-path: inset(20% 0 60% 0); transform: translate(-4px, 2px); color: #0ff; }
+      97%  { clip-path: inset(60% 0 10% 0); transform: translate(4px, -2px); color: #f0f; }
+      98%  { clip-path: none; transform: translate(0); }
+      99%  { clip-path: inset(40% 0 40% 0); transform: translate(-3px); color: #ff2244; }
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="rainCanvas"></canvas>
+  <div id="flash"></div>
+
+  <!-- Countdown -->
+  <div id="countdown-wrap">
+    <div id="countdown-label">time remaining</div>
+    <div id="countdown-value">--:--</div>
+  </div>
+
+  <!-- Zero event -->
+  <div id="zero-overlay">
+    <div id="zero-title">SYSTEM FAILURE</div>
+    <div id="zero-sub">CRITICAL THRESHOLD REACHED</div>
+    <div id="zero-code" id="zero-code"></div>
+  </div>
+
+  <h1>Noah Penis Meter</h1>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:22px;">
+
+    <!--
+    ═══════════════════════════════════════════════════════════════
+     HOW THE MASK WORKS
+     ─────────────────
+     The SVG uses two layers stacked in the same viewBox (0 0 243 600):
+
+     1. GHOST LAYER — the shape drawn in a very dark colour so the
+        silhouette is always visible even when empty.
+
+     2. FILL LAYER  — the gradient rect is clipped with a plain
+        <clipPath> whose single <rect id="revealRect"> slides
+        upward (y decreases) to reveal the fill from the bottom.
+        The entire fill layer is then masked with <mask id="shapeMask">
+        so it only shows through the SVG silhouette.
+
+     Using <mask> (white = show, black = hide) instead of a nested
+     <clipPath> avoids the browser limitation where two clip-path
+     references on the same element are unreliable.
+
+     TO CHANGE THE SHAPE
+     ───────────────────
+     Replace the <path> elements inside:
+       • <mask id="shapeMask"> … <g transform="…"> … </g> </mask>
+       • The ghost <g id="ghost"> paths (for the faint outline effect)
+     Keep the transform="translate(0,600) scale(0.1,-0.1)" so your
+     paths can use the original 2430×6000 coordinate space.
+    ═══════════════════════════════════════════════════════════════
+    -->
+
+    <svg id="barSvg"
+         xmlns="http://www.w3.org/2000/svg"
+         viewBox="0 0 243 600">
+      <defs>
+
+        <!-- ① Shape mask: white where shape is filled → shows the fill layer -->
+        <mask id="shapeMask" maskUnits="userSpaceOnUse"
+              x="0" y="0" width="243" height="600">
+          <g transform="translate(0,600) scale(0.1,-0.1)" fill="white">
+            <path d="M1175 5766 c-159 -73 -215 -300 -140 -560 25 -86 107 -271 138 -311
+27 -35 39 -7 21 50 -20 64 -20 188 -1 241 31 86 90 157 197 236 73 55 92 92
+88 165 -5 83 -42 137 -117 176 -67 33 -119 35 -186 3z"/>
+            <path d="M1753 5091 c-145 -50 -267 -188 -345 -388 -33 -84 -78 -237 -78 -265
+0 -37 30 -16 57 40 34 70 112 150 176 180 76 36 140 45 253 38 120 -8 154 2
+202 60 142 172 -47 412 -265 335z"/>
+            <path d="M525 4943 c-113 -27 -212 -129 -236 -241 -21 -103 28 -231 113 -292
+61 -45 109 -55 198 -41 159 24 277 8 406 -54 75 -36 103 -56 154 -112 39 -43
+75 -96 98 -145 25 -53 43 -78 55 -78 21 0 22 -9 -7 113 -111 464 -331 768
+-611 843 -49 13 -130 17 -170 7z"/>
+            <path d="M1110 3871 c-46 -15 -125 -59 -156 -88 -117 -107 -202 -286 -211
+-445 -7 -116 8 -169 64 -225 l43 -44 0 -700 0 -700 -25 -24 c-13 -14 -34 -25
+-47 -25 -13 0 -44 -6 -69 -14 -138 -42 -239 -127 -301 -253 -40 -81 -43 -92
+-46 -187 -3 -84 0 -112 18 -166 75 -226 302 -369 524 -332 97 17 190 49 242
+84 l43 29 53 -36 c98 -66 231 -95 347 -75 153 26 289 127 359 269 33 67 37 83
+40 173 5 122 -14 203 -67 286 -74 114 -183 189 -316 217 -115 24 -105 -50
+-105 755 l0 697 44 44 c56 57 70 105 63 224 -15 270 -212 527 -414 541 -32 2
+-69 0 -83 -5z"/>
+          </g>
+        </mask>
+
+        <!-- ② Sliding reveal window — y is animated upward by JS -->
+        <clipPath id="fillReveal" clipPathUnits="userSpaceOnUse">
+          <rect id="revealRect" x="0" y="600" width="243" height="600"/>
+        </clipPath>
+
+        <!-- Gradient: pink at bottom → yellow-green at top -->
+        <linearGradient id="fillGrad" x1="0" y1="1" x2="0" y2="0"
+                        gradientUnits="objectBoundingBox">
+          <stop offset="0%"   stop-color="#ff4f7b"/>
+          <stop offset="100%" stop-color="#e8ff47"/>
+        </linearGradient>
+
+        <!-- Gloss sheen -->
+        <linearGradient id="glossGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"   stop-color="white" stop-opacity="0"/>
+          <stop offset="55%"  stop-color="white" stop-opacity="0"/>
+          <stop offset="70%"  stop-color="white" stop-opacity="0.13"/>
+          <stop offset="88%"  stop-color="white" stop-opacity="0"/>
+        </linearGradient>
+
+        <!-- Blur for the leading-edge glow -->
+        <filter id="glowFilter" x="-100%" y="-5%" width="300%" height="110%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3"/>
+        </filter>
+
+      </defs>
+
+      <!-- ── Ghost silhouette (always visible, very dim) ── -->
+      <g id="ghost" transform="translate(0,600) scale(0.1,-0.1)"
+         fill="#1c1c2a" stroke="rgba(255,255,255,0.08)" stroke-width="6">
+        <path d="M1175 5766 c-159 -73 -215 -300 -140 -560 25 -86 107 -271 138 -311
+27 -35 39 -7 21 50 -20 64 -20 188 -1 241 31 86 90 157 197 236 73 55 92 92
+88 165 -5 83 -42 137 -117 176 -67 33 -119 35 -186 3z"/>
+        <path d="M1753 5091 c-145 -50 -267 -188 -345 -388 -33 -84 -78 -237 -78 -265
+0 -37 30 -16 57 40 34 70 112 150 176 180 76 36 140 45 253 38 120 -8 154 2
+202 60 142 172 -47 412 -265 335z"/>
+        <path d="M525 4943 c-113 -27 -212 -129 -236 -241 -21 -103 28 -231 113 -292
+61 -45 109 -55 198 -41 159 24 277 8 406 -54 75 -36 103 -56 154 -112 39 -43
+75 -96 98 -145 25 -53 43 -78 55 -78 21 0 22 -9 -7 113 -111 464 -331 768
+-611 843 -49 13 -130 17 -170 7z"/>
+        <path d="M1110 3871 c-46 -15 -125 -59 -156 -88 -117 -107 -202 -286 -211
+-445 -7 -116 8 -169 64 -225 l43 -44 0 -700 0 -700 -25 -24 c-13 -14 -34 -25
+-47 -25 -13 0 -44 -6 -69 -14 -138 -42 -239 -127 -301 -253 -40 -81 -43 -92
+-46 -187 -3 -84 0 -112 18 -166 75 -226 302 -369 524 -332 97 17 190 49 242
+84 l43 29 53 -36 c98 -66 231 -95 347 -75 153 26 289 127 359 269 33 67 37 83
+40 173 5 122 -14 203 -67 286 -74 114 -183 189 -316 217 -115 24 -105 -50
+-105 755 l0 697 44 44 c56 57 70 105 63 224 -15 270 -212 527 -414 541 -32 2
+-69 0 -83 -5z"/>
+      </g>
+
+      <!-- ── Fill layer: gradient + gloss, clipped by revealRect, masked to shape ── -->
+      <g mask="url(#shapeMask)">
+
+        <!-- Gradient fill, revealed from bottom upward -->
+        <rect x="0" y="0" width="243" height="600"
+              fill="url(#fillGrad)"
+              clip-path="url(#fillReveal)"/>
+
+        <!-- Gloss over fill -->
+        <rect x="0" y="0" width="243" height="600"
+              fill="url(#glossGrad)"
+              clip-path="url(#fillReveal)"
+              opacity="0.7"/>
+
+        <!-- Leading-edge glow (white bar at the top of the fill) -->
+        <rect id="glowBar" x="0" y="600" width="243" height="5"
+              fill="white" opacity="0.75" filter="url(#glowFilter)"/>
+
+      </g>
+
+      <!-- ── Tick marks (clipped to shape via mask) ── -->
+      <g id="ticks" mask="url(#shapeMask)"></g>
+
+    </svg>
+
+    <div class="bar-value" id="barValue">0%</div>
+  </div>
+
+  <footer>The Full Penis Meter Experience</footer>
+
+<script>
+  const VH          = 600;
+  const revealRect  = document.getElementById('revealRect');
+  const glowBar     = document.getElementById('glowBar');
+  const valEl       = document.getElementById('barValue');
+  const ticksEl     = document.getElementById('ticks');
+
+  // Build tick lines inside the shape
+  for (let pct = 10; pct < 100; pct += 10) {
+    const y       = VH * (1 - pct / 100);
+    const isMajor = pct % 25 === 0;
+    const line    = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', isMajor ? '185' : '205');
+    line.setAttribute('x2', '243');
+    line.setAttribute('y1', y);
+    line.setAttribute('y2', y);
+    line.setAttribute('stroke', isMajor ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.12)');
+    line.setAttribute('stroke-width', isMajor ? '1.5' : '1');
+    ticksEl.appendChild(line);
+  }
+
+  let animId     = null;
+  let currentPct = 0;
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function animateTo(targetPct, duration) {
+    if (animId) cancelAnimationFrame(animId);
+    const startPct  = currentPct;
+    const startTime = performance.now();
+
+    function step(now) {
+      const t       = Math.min((now - startTime) / duration, 1);
+      const eased   = easeOutCubic(t);
+      const pct     = startPct + (targetPct - startPct) * eased;
+
+      const revealY = VH * (1 - pct / 100);
+      revealRect.setAttribute('y', revealY);
+      revealRect.setAttribute('height', VH - revealY + VH);
+      glowBar.setAttribute('y', revealY - 3);
+      valEl.textContent = Math.round(pct) + '%';
+
+      if (t < 1) {
+        animId = requestAnimationFrame(step);
+      } else {
+        currentPct = targetPct;
+        animId = null;
+        if (targetPct >= 100) triggerRain();
+        else stopRain();
+      }
+    }
+    animId = requestAnimationFrame(step);
+  }
+
+  function randomise() {
+    valEl.classList.remove('full');
+    const target = Math.floor(Math.random() * 96) + 5; // 5–100
+    animateTo(target, 1400);
+  }
+
+  randomise();
+
+  /* ═══════════════════════════════════════════════════
+     RAIN SYSTEM
+  ═══════════════════════════════════════════════════ */
+  const canvas  = document.getElementById('rainCanvas');
+  const ctx     = canvas.getContext('2d');
+  const flash   = document.getElementById('flash');
+  let rainLoopId = null;
+  let drops      = [];
+
+  function resizeCanvas() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  // A drop: x, y, length, speed, width, opacity, drift
+  function makeDrop() {
+    return {
+      x:       Math.random() * canvas.width,
+      y:       Math.random() * -canvas.height * 0.5,   // start above screen
+      len:     40 + Math.random() * 60,
+      speed:   9  + Math.random() * 12,
+      w:       2.5 + Math.random() * 3,
+      opacity: 0.7 + Math.random() * 0.3,
+      drift:   (Math.random() - 0.5) * 0.6,            // slight horizontal sway
+      splash:  null,
+    };
+  }
+
+  // Splash: x, y, progress (0→1), radius
+  function makeSplash(x, y) {
+    return { x, y, t: 0, r: 3 + Math.random() * 5 };
+  }
+
+  function initDrops(count) {
+    drops = [];
+    for (let i = 0; i < count; i++) {
+      const d = makeDrop();
+      d.y = Math.random() * canvas.height; // stagger starting positions
+      drops.push(d);
+    }
+  }
+
+  function drawRain() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (const d of drops) {
+      // Draw streak
+      const grad = ctx.createLinearGradient(d.x, d.y, d.x + d.drift * d.len, d.y + d.len);
+      grad.addColorStop(0, `rgba(255, 255, 255, 0)`);
+      grad.addColorStop(1, `rgba(255, 255, 255, ${d.opacity})`);
+
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y);
+      ctx.lineTo(d.x + d.drift * d.len, d.y + d.len);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth   = d.w;
+      ctx.stroke();
+
+      // Draw splash if present
+      if (d.splash) {
+        const s = d.splash;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r * s.t, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 * (1 - s.t)})`;
+        ctx.lineWidth   = 0.8;
+        ctx.stroke();
+
+        // Small arc sprays
+        for (let i = 0; i < 3; i++) {
+          const angle = (Math.PI * (0.8 + i * 0.2)) + (i % 2 === 0 ? -1 : 1) * 0.3;
+          const sx    = s.x + Math.cos(angle) * s.r * s.t * 2.5;
+          const sy    = s.y + Math.sin(angle) * s.r * s.t * 1.2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.2 * (1 - s.t), 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,255,255,${0.5*(1-s.t)})`;
+          ctx.fill();
+        }
+
+        s.t += 0.06;
+        if (s.t >= 1) d.splash = null;
+      }
+
+      // Advance drop
+      d.y += d.speed;
+      d.x += d.drift;
+
+      // Reset when off screen
+      if (d.y - d.len > canvas.height) {
+        // Trigger splash at bottom
+        d.splash = makeSplash(d.x, canvas.height - 2);
+        Object.assign(d, makeDrop());
+      }
+    }
+  }
+
+  function triggerRain() {
+    valEl.classList.add('full');
+
+    // Flash
+    flash.classList.add('show');
+    setTimeout(() => flash.classList.remove('show'), 150);
+
+    if (rainLoopId) return; // already raining
+    canvas.classList.add('active');
+    initDrops(120);
+
+    function loop() {
+      drawRain();
+      rainLoopId = requestAnimationFrame(loop);
+    }
+    rainLoopId = requestAnimationFrame(loop);
+  }
+
+  function stopRain() {
+    valEl.classList.remove('full');
+    if (!rainLoopId) return;
+    cancelAnimationFrame(rainLoopId);
+    rainLoopId = null;
+    drops = [];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.classList.remove('active');
+  }
+
+  /* ═══════════════════════════════════════════════════
+     COUNTDOWN SYSTEM
+  ═══════════════════════════════════════════════════ */
+  const cdValue   = document.getElementById('countdown-value');
+  const cdLabel   = document.getElementById('countdown-label');
+  const zeroOverlay = document.getElementById('zero-overlay');
+  const zeroCode    = document.getElementById('zero-code');
+
+  // Random between 30s and 3m
+  let cdRemaining = Math.floor(Math.random() * 150) + 30;
+  let cdInterval  = null;
+
+  const errorLines = [
+    'CORE PROCESS 0x4F2A TERMINATED',
+    'MEMORY INTEGRITY CHECK FAILED',
+    'WATCHDOG TIMEOUT — NO RESPONSE',
+    'KERNEL PANIC: UNRECOVERABLE STATE',
+    'BROADCAST TO ALL NODES: EVACUATE',
+  ];
+
+  function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  }
+
+  function updateCountdown() {
+    cdValue.textContent = formatTime(cdRemaining);
+
+    if (cdRemaining <= 10) {
+      cdValue.classList.remove('warning');
+      cdValue.classList.add('critical');
+      cdLabel.style.color = '#ff224466';
+    } else if (cdRemaining <= 30) {
+      cdValue.classList.remove('critical');
+      cdValue.classList.add('warning');
+      cdLabel.style.color = '#ff6b3566';
+    }
+
+    if (cdRemaining <= 0) {
+      clearInterval(cdInterval);
+      triggerZero();
+      return;
+    }
+    cdRemaining--;
+  }
+
+  function triggerZero() {
+    cdValue.textContent = '00:00';
+
+    // Rapid red flicker then go black
+    let flickers = 0;
+    const flicker = setInterval(() => {
+      document.body.style.background = flickers % 2 === 0 ? '#1a0005' : '#000';
+      flickers++;
+      if (flickers > 8) {
+        clearInterval(flicker);
+        document.body.style.background = '#000';
+        showZeroOverlay();
+      }
+    }, 80);
+  }
+
+  function showZeroOverlay() {
+    zeroCode.innerHTML = '';
+    // Type out error lines one by one
+    zeroOverlay.classList.add('visible');
+    let lineIndex = 0;
+    function typeLine() {
+      if (lineIndex >= errorLines.length) return;
+      const line = document.createElement('div');
+      line.textContent = '> ' + errorLines[lineIndex];
+      zeroCode.appendChild(line);
+      lineIndex++;
+      setTimeout(typeLine, 340);
+    }
+    typeLine();
+  }
+
+  // Start countdown
+  updateCountdown();
+  cdInterval = setInterval(updateCountdown, 1000);
+</script>
+</body>
+</html>
